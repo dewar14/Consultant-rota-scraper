@@ -21,11 +21,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Write credentials
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: printenv GOOGLE_CREDENTIALS_JSON > "${{ runner.temp }}/credentials.json"
+
       - name: Run rota sync
         env:
           GOOGLE_CREDENTIALS_PATH: ${{ runner.temp }}/credentials.json
-          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
-        run: |
-          echo "$GOOGLE_CREDENTIALS_JSON" > "$GOOGLE_CREDENTIALS_PATH"
-          python rota_sync.py
-          rm -f "$GOOGLE_CREDENTIALS_PATH"
+        run: python rota_sync.py
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f "${{ runner.temp }}/credentials.json"
