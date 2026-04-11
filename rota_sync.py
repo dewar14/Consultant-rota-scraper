@@ -101,19 +101,35 @@ def parse_date_cell(value: str) -> date | None:
 
 
 def find_target_sheet(sheets_service) -> str:
-    """Find the sheet tab containing 2026 dates."""
+    """Find the sheet tab containing the rota data."""
     meta = sheets_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
     sheets = meta.get("sheets", [])
     tab_names = [s["properties"]["title"] for s in sheets]
     log.info(f"Available tabs: {tab_names}")
 
-    # Prefer tab with "25-26" or "2025-26" or "2026" in name
+    # Prefer tab with year references
     for name in tab_names:
-        if "25-26" in name or "2025-26" in name or "2026" in name:
-            log.info(f"Selected tab: {name}")
+        lower = name.lower()
+        if "25-26" in lower or "2025-26" in lower or "2026" in lower:
+            log.info(f"Selected tab (year match): {name}")
             return name
-    # Fallback: last tab (most recent year)
-    fallback = tab_names[-1]
+
+    # Next: look for "RITA" or "rota" or "plan" with a year
+    for name in tab_names:
+        lower = name.lower()
+        if "rita" in lower or "rota" in lower:
+            log.info(f"Selected tab (name match): {name}")
+            return name
+
+    # Next: "PLAN" with a year number
+    for name in tab_names:
+        lower = name.lower()
+        if "plan" in lower and any(c.isdigit() for c in name):
+            log.info(f"Selected tab (plan match): {name}")
+            return name
+
+    # Fallback: first tab
+    fallback = tab_names[0]
     log.info(f"Fallback tab selected: {fallback}")
     return fallback
 
@@ -372,8 +388,21 @@ def main():
         log.error("Could not identify any relevant columns from header row")
         return
 
+    # Log header row for debugging
+    header_texts = [get_cell_text(c) for c in header_cells]
+    log.info(f"Header row: {header_texts}")
+
+    # Log first 5 data rows for debugging date format
+    for dbg_idx in range(1, min(6, len(row_data))):
+        dbg_row = row_data[dbg_idx]
+        dbg_cells = dbg_row.get("values", [])
+        if dbg_cells:
+            col_a = get_cell_text(dbg_cells[0])
+            log.info(f"  Row {dbg_idx} col A: '{col_a}'")
+
     # Process each row to find Alex's shifts
     shifts: dict[date, tuple[str, str]] = {}  # date -> (title, color_id)
+    unparsed_dates = 0
 
     for row_idx in range(1, len(row_data)):
         row = row_data[row_idx]
@@ -385,6 +414,8 @@ def main():
         date_text = get_cell_text(cells[0]) if cells else ""
         row_date = parse_date_cell(date_text)
         if row_date is None:
+            if date_text.strip():
+                unparsed_dates += 1
             continue
 
         # Only process dates in our window
@@ -395,6 +426,8 @@ def main():
         if shift:
             shifts[row_date] = shift
 
+    if unparsed_dates > 0:
+        log.warning(f"Could not parse {unparsed_dates} non-empty date cells - date format may differ from expected 'Monday-28Apr26'")
     log.info(f"\nFound {len(shifts)} shifts in date range")
 
     # Fetch existing rota events from calendar
