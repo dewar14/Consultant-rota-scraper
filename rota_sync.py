@@ -32,10 +32,10 @@ COLOR_SERVICE = "6"   # orange
 COLOR_ONCALL = "11"   # red
 COLOR_COMET = "5"     # yellow
 
-# RGB thresholds for gold/amber text (planned shift)
-GOLD_R_MIN, GOLD_R_MAX = 180, 210
-GOLD_G_MIN, GOLD_G_MAX = 130, 160
-GOLD_B_MIN, GOLD_B_MAX = 0, 50
+# RGB thresholds for gold/amber/bronze text (planned shift)
+GOLD_R_MIN, GOLD_R_MAX = 140, 220
+GOLD_G_MIN, GOLD_G_MAX = 100, 180
+GOLD_B_MIN, GOLD_B_MAX = 0, 80
 
 # RGB threshold for black text (locum shift)
 BLACK_MAX = 50
@@ -380,20 +380,37 @@ def main():
         log.error("No row data found in sheet")
         return
 
-    # Parse header row to identify columns
-    header_cells = row_data[0].get("values", [])
+    # Find the header row dynamically (scan for a row containing "Service")
+    header_row_idx = None
+    for scan_idx in range(min(50, len(row_data))):
+        scan_cells = row_data[scan_idx].get("values", [])
+        scan_texts = [get_cell_text(c).lower().strip() for c in scan_cells]
+        if "service" in scan_texts:
+            header_row_idx = scan_idx
+            break
+
+    if header_row_idx is None:
+        log.error("Could not find header row containing 'Service' in first 50 rows")
+        # Log first few rows for debugging
+        for dbg_idx in range(min(10, len(row_data))):
+            dbg_cells = row_data[dbg_idx].get("values", [])
+            dbg_texts = [get_cell_text(c) for c in dbg_cells]
+            log.info(f"  Row {dbg_idx}: {dbg_texts}")
+        return
+
+    header_cells = row_data[header_row_idx].get("values", [])
     columns = identify_columns(header_cells)
+    header_texts = [get_cell_text(c) for c in header_cells]
+    log.info(f"Header row index: {header_row_idx}")
+    log.info(f"Header row: {header_texts}")
 
     if not columns:
         log.error("Could not identify any relevant columns from header row")
         return
 
-    # Log header row for debugging
-    header_texts = [get_cell_text(c) for c in header_cells]
-    log.info(f"Header row: {header_texts}")
-
-    # Log first 5 data rows for debugging date format
-    for dbg_idx in range(1, min(6, len(row_data))):
+    # Log first 5 data rows after header for debugging
+    data_start = header_row_idx + 1
+    for dbg_idx in range(data_start, min(data_start + 5, len(row_data))):
         dbg_row = row_data[dbg_idx]
         dbg_cells = dbg_row.get("values", [])
         if dbg_cells:
@@ -404,7 +421,7 @@ def main():
     shifts: dict[date, tuple[str, str]] = {}  # date -> (title, color_id)
     unparsed_dates = 0
 
-    for row_idx in range(1, len(row_data)):
+    for row_idx in range(data_start, len(row_data)):
         row = row_data[row_idx]
         cells = row.get("values", [])
         if not cells:
