@@ -29,6 +29,7 @@ jobs:
       - name: Run rota sync
         env:
           GOOGLE_CREDENTIALS_PATH: ${{ runner.temp }}/credentials.json
+          CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
         run: python rota_sync.py
 
       - name: Clean up credentials

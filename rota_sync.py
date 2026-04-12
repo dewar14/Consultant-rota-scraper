@@ -27,14 +27,20 @@ WEEKS_AHEAD = 8
 EVENT_DESCRIPTION = "Scraped from RITA rota"
 MY_NAME = "Alex"
 
+# Calendar ID: must be set to your actual Google account email address.
+# "primary" would refer to the SERVICE ACCOUNT's own calendar, not yours.
+# Override via the CALENDAR_ID environment variable.
+CALENDAR_ID = os.environ.get("CALENDAR_ID", "primary")
+
 # Google Calendar colour IDs
 COLOR_SERVICE = "6"   # orange
 COLOR_ONCALL = "11"   # red
 COLOR_COMET = "5"     # yellow
 
 # RGB thresholds for gold/amber/bronze text (planned shift)
-GOLD_R_MIN, GOLD_R_MAX = 140, 220
-GOLD_G_MIN, GOLD_G_MAX = 100, 180
+# Actual observed value in this rota: (127, 96, 0)
+GOLD_R_MIN, GOLD_R_MAX = 100, 220
+GOLD_G_MIN, GOLD_G_MAX = 70, 180
 GOLD_B_MIN, GOLD_B_MAX = 0, 80
 
 # RGB threshold for black text (locum shift)
@@ -308,7 +314,7 @@ def get_existing_rota_events(cal_service, start_date: date, end_date: date) -> d
     page_token = None
     while True:
         result = cal_service.events().list(
-            calendarId="primary",
+            calendarId=CALENDAR_ID,
             timeMin=time_min,
             timeMax=time_max,
             singleEvents=True,
@@ -335,13 +341,13 @@ def create_event(cal_service, event_date: date, title: str, color_id: str):
         "end": {"date": (event_date + timedelta(days=1)).isoformat()},
         "colorId": color_id,
     }
-    cal_service.events().insert(calendarId="primary", body=body).execute()
+    cal_service.events().insert(calendarId=CALENDAR_ID, body=body).execute()
     log.info(f"  CREATED: {event_date} - {title}")
 
 
 def delete_event(cal_service, event: dict):
     """Delete a calendar event."""
-    cal_service.events().delete(calendarId="primary", eventId=event["id"]).execute()
+    cal_service.events().delete(calendarId=CALENDAR_ID, eventId=event["id"]).execute()
     log.info(f"  DELETED: {event.get('start', {}).get('date')} - {event.get('summary')}")
 
 
