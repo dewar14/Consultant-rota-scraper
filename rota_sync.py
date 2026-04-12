@@ -23,7 +23,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets.readonly",
     "https://www.googleapis.com/auth/calendar",
 ]
-WEEKS_AHEAD = 8
+WEEKS_AHEAD = 16
 EVENT_DESCRIPTION = "Scraped from RITA rota"
 MY_NAME = "Alex"
 
@@ -465,18 +465,21 @@ def main():
 
         if desired:
             title, color_id = desired
-            # Check if a matching event already exists
-            match_found = False
-            for ev in existing_events:
-                if ev.get("summary") == title and ev.get("colorId") == color_id:
-                    match_found = True
-                    log.info(f"  SKIPPED (exists): {date_str} - {title}")
-                    break
+            # Find matching events and stale events on this date
+            matching = [ev for ev in existing_events
+                        if ev.get("summary") == title and ev.get("colorId") == color_id]
+            stale = [ev for ev in existing_events if ev not in matching]
 
-            if not match_found:
-                # Delete any stale rota events on this date
-                for ev in existing_events:
-                    delete_event(cal_service, ev)
+            # Delete all stale rota events
+            for ev in stale:
+                delete_event(cal_service, ev)
+
+            if matching:
+                # Keep one matching event, delete duplicates
+                log.info(f"  SKIPPED (exists): {date_str} - {title}")
+                for dup in matching[1:]:
+                    delete_event(cal_service, dup)
+            else:
                 # Create the correct event
                 create_event(cal_service, current, title, color_id)
         else:
