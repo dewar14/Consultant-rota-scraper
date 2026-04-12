@@ -185,21 +185,29 @@ def get_cell_text_color(cell_data: dict) -> tuple[int, int, int]:
 def identify_columns(header_cells: list[dict]) -> dict:
     """Map column header names to indices."""
     columns = {}
-    comet_count = 0
     for idx, cell in enumerate(header_cells):
         text = get_cell_text(cell).lower().strip()
         if text == "service":
             columns["service"] = idx
         elif text == "oncall" or text == "on call" or text == "on-call":
-            columns["oncall"] = idx
+            columns.setdefault("oncall_cols", []).append(idx)
         elif "comet" in text:
-            comet_count += 1
-            # Store all CoMET columns
             columns.setdefault("comet_cols", []).append(idx)
         elif text == "bckp":
             columns["bckp"] = idx
         elif text == "cbck":
             columns["cbck"] = idx
+
+    # Treat any unlabeled column immediately following OnCall as a
+    # secondary OnCall column (used for weekend on-calls in the RITA tab).
+    if "oncall_cols" in columns:
+        primary_oncall = columns["oncall_cols"][0]
+        next_idx = primary_oncall + 1
+        if next_idx < len(header_cells):
+            next_text = get_cell_text(header_cells[next_idx]).strip()
+            if not next_text and next_idx not in columns["oncall_cols"]:
+                columns["oncall_cols"].append(next_idx)
+
     log.info(f"Identified columns: {columns}")
     return columns
 
@@ -229,8 +237,8 @@ def detect_shift(row_cells: list[dict], columns: dict, row_date: date) -> tuple[
     check_cols = []
     if "service" in columns:
         check_cols.append(("service", columns["service"]))
-    if "oncall" in columns:
-        check_cols.append(("oncall", columns["oncall"]))
+    for oncall_idx in columns.get("oncall_cols", []):
+        check_cols.append(("oncall", oncall_idx))
     for comet_idx in columns.get("comet_cols", []):
         check_cols.append(("comet", comet_idx))
 
@@ -274,9 +282,11 @@ def detect_shift(row_cells: list[dict], columns: dict, row_date: date) -> tuple[
                 if "service" in columns and columns["service"] < len(row_cells):
                     if has_strikethrough(row_cells[columns["service"]]):
                         covered_type = "Service"
-                if covered_type is None and "oncall" in columns and columns["oncall"] < len(row_cells):
-                    if has_strikethrough(row_cells[columns["oncall"]]):
-                        covered_type = "On Call"
+                if covered_type is None:
+                    for oncall_idx in columns.get("oncall_cols", []):
+                        if oncall_idx < len(row_cells) and has_strikethrough(row_cells[oncall_idx]):
+                            covered_type = "On Call"
+                            break
                 if covered_type is None:
                     # Default to Service if can't determine
                     covered_type = "Service"
