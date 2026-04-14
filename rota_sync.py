@@ -25,7 +25,9 @@ SCOPES = [
 ]
 WEEKS_AHEAD = 16
 EVENT_DESCRIPTION = "Scraped from RITA rota"
-MY_NAME = "Alex"
+
+# Your first name as it appears in the rota. Override via MY_NAME env var.
+MY_NAME = os.environ.get("MY_NAME", "Alex")
 
 # Calendar ID: must be set to your actual Google account email address.
 # "primary" would refer to the SERVICE ACCOUNT's own calendar, not yours.
