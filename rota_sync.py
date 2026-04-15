@@ -27,7 +27,11 @@ WEEKS_AHEAD = 16
 EVENT_DESCRIPTION = "Scraped from RITA rota"
 
 # Your first name as it appears in the rota. Override via MY_NAME env var.
-MY_NAME = os.environ.get("MY_NAME", "Alex")
+# Note: use `or` rather than a default, so an empty-string env var (which is
+# what GitHub Actions passes through when a secret is unset) still falls back.
+MY_NAME = (os.environ.get("MY_NAME") or "Alex").strip()
+if not MY_NAME:
+    sys.exit("ERROR: MY_NAME is empty after stripping; refusing to run (would match every name).")
 
 # Calendar ID: must be set to your actual Google account email address.
 # "primary" would refer to the SERVICE ACCOUNT's own calendar, not yours.
@@ -215,7 +219,9 @@ def identify_columns(header_cells: list[dict]) -> dict:
 
 
 def contains_alex(text: str) -> bool:
-    """Check if cell text contains 'Alex' (case-insensitive partial match)."""
+    """Check if cell text contains MY_NAME (case-insensitive partial match)."""
+    if not MY_NAME or not text:
+        return False
     return MY_NAME.lower() in text.lower()
 
 
