@@ -214,6 +214,19 @@ def identify_columns(header_cells: list[dict]) -> dict:
             if not next_text and next_idx not in columns["oncall_cols"]:
                 columns["oncall_cols"].append(next_idx)
 
+    # Likewise, weekend CoMET shifts are written one column to the right of
+    # the labelled CoMET columns (into the unlabeled spacer columns). Add the
+    # unlabeled column immediately following each CoMET column so they're
+    # scanned too. Mirrors the weekend on-call handling above.
+    if "comet_cols" in columns:
+        for comet_idx in list(columns["comet_cols"]):
+            next_idx = comet_idx + 1
+            if next_idx >= len(header_cells):
+                continue
+            next_text = get_cell_text(header_cells[next_idx]).strip()
+            if not next_text and next_idx not in columns["comet_cols"]:
+                columns["comet_cols"].append(next_idx)
+
     log.info(f"Identified columns: {columns}")
     return columns
 
