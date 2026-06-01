@@ -479,6 +479,18 @@ def main():
         shift = detect_shift(cells, columns, row_date)
         if shift:
             shifts[row_date] = shift
+        else:
+            # Diagnostic safety net: if our name appears anywhere on a row we
+            # didn't classify as a shift, log which column it's in. This makes
+            # mis-placed entries (e.g. unexpected weekend layouts) obvious from
+            # the logs instead of silently vanishing.
+            for ci, cell in enumerate(cells):
+                cell_text = get_cell_text(cell)
+                if contains_alex(cell_text):
+                    log.warning(
+                        f"  {row_date}: '{cell_text}' present in UNMATCHED column "
+                        f"{ci} - not classified as a shift (check column mapping)"
+                    )
 
     if unparsed_dates > 0:
         log.warning(f"Could not parse {unparsed_dates} non-empty date cells - date format may differ from expected 'Monday-28Apr26'")
