@@ -1,0 +1,37 @@
+name: Daily Term Dates Sync
+
+on:
+  schedule:
+    # Runs daily at 06:30 UTC
+    - cron: "30 6 * * *"
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write credentials
+        env:
+          GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: printenv GOOGLE_CREDENTIALS_JSON > "${{ runner.temp }}/credentials.json"
+
+      - name: Run term dates sync
+        env:
+          GOOGLE_CREDENTIALS_PATH: ${{ runner.temp }}/credentials.json
+          CALENDAR_ID: ${{ secrets.CALENDAR_ID }}
+        run: python term_dates_sync.py
+
+      - name: Clean up credentials
+        if: always()
+        run: rm -f "${{ runner.temp }}/credentials.json"
