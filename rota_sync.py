@@ -197,6 +197,10 @@ def identify_columns(header_cells: list[dict]) -> dict:
             columns["service"] = idx
         elif text == "oncall" or text == "on call" or text == "on-call":
             columns.setdefault("oncall_cols", []).append(idx)
+        elif text == "weekend":
+            # Weekend on-calls sit in their own column, labelled "weekend"
+            # in the RITA tab header row.
+            columns.setdefault("oncall_cols", []).append(idx)
         elif "comet" in text:
             columns.setdefault("comet_cols", []).append(idx)
         elif text == "bckp":
