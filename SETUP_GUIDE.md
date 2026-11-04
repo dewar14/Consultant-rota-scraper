@@ -118,6 +118,20 @@ Menu names shift between versions. Google's and Microsoft's own instructions are
 
 ---
 
+## Already set up? Update your copy when the rota moves
+
+In November 2026 the rota moved to a new spreadsheet. If you made your copy before then, it is still reading the old one, so your calendar will stop following the rota until you update it. This takes about two minutes, and you only need to do it once. If you are setting up for the first time, skip this section, because your copy already has the new address.
+
+1. Go to your copy on GitHub. The web address starts with `github.com/` followed by **your** username.
+2. Make sure you are on the **Code** tab. Just above the list of files, you will see a line saying your copy is some commits **behind** `dewar14`. Click **Sync fork** next to it.
+3. Click the green **Update branch** button. If it only offers **Discard commits**, stop and message Alex rather than clicking it.
+4. Click the **Actions** tab, then **Daily Rota Sync** → **Run workflow** → green **Run workflow**, and wait for the green tick (as in Step 5).
+5. Check your **Consultant rota** calendar. Your shifts should still be there, and they now follow the new rota.
+
+Your secrets, calendar and Outlook or iPhone subscriptions stay as they are, so there is nothing to redo. Alex has already given the robot access to the new spreadsheet.
+
+---
+
 ## Troubleshooting
 
 To see why a run failed, click the red cross in the **Actions** tab, then **sync**, then the step with the red cross, and look near the bottom for the error.
@@ -129,6 +143,7 @@ To see why a run failed, click the red cross in the **Actions** tab, then **sync
 | Green tick but "Found 0 shifts" | Your `MY_NAME` does not match the rota spelling, or you genuinely have no shifts in the next 16 weeks. |
 | Green tick but nothing in your calendar | Check you are looking at the **Consultant rota** calendar and it is ticked. Outlook and iCal subscriptions can lag by several hours. |
 | Stopped updating after a couple of months | GitHub pauses timers on copies with no activity for 60 days. Go to **Actions** → **Daily Rota Sync** → **Run workflow** once to restart it. |
+| Green ticks, but the calendar no longer matches the rota | Your copy may still be reading the old spreadsheet. Follow **Already set up? Update your copy** above. |
 | A shift is missing or wrong after a re-run | Message Alex with your name, the date and a screenshot of that part of the rota. |
 
 ## Good to know
