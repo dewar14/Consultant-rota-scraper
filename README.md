@@ -100,7 +100,7 @@ Add a line to run daily at 7am:
 
 Key constants at the top of `rota_sync.py`:
 
-- `SPREADSHEET_ID` — the Google Sheets document ID
-- `WEEKS_AHEAD` — how far ahead to process (default: 8 weeks)
+- `SPREADSHEET_ID` — the Google Sheets document ID (changed in November 2026, when the rota moved to a new spreadsheet; existing forks need to **Sync fork** to pick it up)
+- `WEEKS_AHEAD` — how far ahead to process (default: 16 weeks)
 - `GOLD_R_MIN/MAX`, `GOLD_G_MIN/MAX`, `GOLD_B_MIN/MAX` — RGB thresholds for gold/amber text
 - `MY_NAME` — the name to search for in the rota (default: "Alex")
