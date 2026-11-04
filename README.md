@@ -94,7 +94,8 @@ Add a line to run daily at 7am:
 - **403 on Calendar write**: Ensure you shared the calendar with the service account email with "Make changes to events" permission.
 - **403 on Sheets read**: Ensure you shared the spreadsheet with the service account email.
 - **Wrong shifts detected**: On first run, the script logs RGB values for cells containing "Alex". Check these match the expected gold/amber range (R: 180-210, G: 130-160, B: 0-50). Adjust thresholds in the script if needed.
-- **No tab found**: The script looks for tab names containing "25-26" or "2026". Check your spreadsheet tab names.
+- **No tab found**: The script tries tabs in order (a tab named "RITA" first, then names containing "rita", "rota" or the current year, then the rest) and uses the first whose header row has Service, OnCall and CoMET columns and which has dates in the sync window. If none qualifies it exits with an error and leaves the calendar alone.
+- **"Found 0 shifts … Refusing to delete them"**: The run found none of your shifts but your calendar has rota events, so it stopped rather than wipe them. Check `MY_NAME` and the rota layout.
 
 ## Configuration
 

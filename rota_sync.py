@@ -112,38 +112,87 @@ def parse_date_cell(value: str) -> date | None:
         return None
 
 
-def find_target_sheet(sheets_service) -> str:
-    """Find the sheet tab containing the rota data."""
+def rank_tabs(tab_names: list[str]) -> list[str]:
+    """Order tab names from most to least likely to hold the live rota.
+
+    The rota itself lives on a tab called "RITA". Other tabs (e.g. "PLAN 2026")
+    can carry the current year in their name but hold summaries, so a year in
+    the name is only a weak hint. Every tab is returned; the caller validates
+    each one in turn and uses the first that actually looks like the rota.
+    """
+    def score(name: str) -> int:
+        lower = name.lower().strip()
+        if lower == "rita":
+            return 0
+        if "rita" in lower:
+            return 1
+        if "rota" in lower:
+            return 2
+        if any(str(y) in lower for y in (date.today().year, date.today().year + 1)):
+            return 3
+        return 4
+
+    # sorted() is stable, so ties keep the spreadsheet's own tab order.
+    return sorted(tab_names, key=score)
+
+
+def find_header_row(row_data: list[dict]) -> int | None:
+    """Return the index of the first row (within 50) that has a 'Service' cell."""
+    for scan_idx in range(min(50, len(row_data))):
+        scan_cells = row_data[scan_idx].get("values", [])
+        scan_texts = [get_cell_text(c).lower().strip() for c in scan_cells]
+        if "service" in scan_texts:
+            return scan_idx
+    return None
+
+
+def load_rota_tab(sheets_service, today: date, end_date: date):
+    """Find and load the tab holding the rota.
+
+    A tab only counts if its header row has Service, OnCall and CoMET columns
+    AND it has at least one parseable date inside the sync window. This stops a
+    look-alike tab (a summary, last year's plan) from being used, which would
+    otherwise make every existing calendar event look stale.
+
+    Returns (tab_name, row_data, header_row_idx, columns) or None.
+    """
     meta = sheets_service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
-    sheets = meta.get("sheets", [])
-    tab_names = [s["properties"]["title"] for s in sheets]
+    tab_names = [s["properties"]["title"] for s in meta.get("sheets", [])]
     log.info(f"Available tabs: {tab_names}")
 
-    # Prefer tab with year references
-    for name in tab_names:
-        lower = name.lower()
-        if "25-26" in lower or "2025-26" in lower or "2026" in lower:
-            log.info(f"Selected tab (year match): {name}")
-            return name
+    for tab_name in rank_tabs(tab_names):
+        resp = sheets_service.spreadsheets().get(
+            spreadsheetId=SPREADSHEET_ID,
+            ranges=[tab_name],
+            includeGridData=True,
+        ).execute()
+        row_data = resp["sheets"][0]["data"][0].get("rowData", [])
 
-    # Next: look for "RITA" or "rota" or "plan" with a year
-    for name in tab_names:
-        lower = name.lower()
-        if "rita" in lower or "rota" in lower:
-            log.info(f"Selected tab (name match): {name}")
-            return name
+        header_row_idx = find_header_row(row_data)
+        if header_row_idx is None:
+            log.info(f"Skipping tab '{tab_name}': no header row containing 'Service'")
+            continue
 
-    # Next: "PLAN" with a year number
-    for name in tab_names:
-        lower = name.lower()
-        if "plan" in lower and any(c.isdigit() for c in name):
-            log.info(f"Selected tab (plan match): {name}")
-            return name
+        columns = identify_columns(row_data[header_row_idx].get("values", []))
+        missing = [k for k in ("service", "oncall_cols", "comet_cols") if k not in columns]
+        if missing:
+            log.info(f"Skipping tab '{tab_name}': header row lacks {missing}")
+            continue
 
-    # Fallback: first tab
-    fallback = tab_names[0]
-    log.info(f"Fallback tab selected: {fallback}")
-    return fallback
+        dated_rows = 0
+        for row in row_data[header_row_idx + 1:]:
+            cells = row.get("values", [])
+            row_date = parse_date_cell(get_cell_text(cells[0])) if cells else None
+            if row_date and today <= row_date < end_date:
+                dated_rows += 1
+        if dated_rows == 0:
+            log.info(f"Skipping tab '{tab_name}': no dates between {today} and {end_date}")
+            continue
+
+        log.info(f"Selected tab: {tab_name} ({dated_rows} dated rows in range)")
+        return tab_name, row_data, header_row_idx, columns
+
+    return None
 
 
 def get_rgb(color_dict: dict) -> tuple[int, int, int]:
@@ -405,49 +454,19 @@ def main():
     end_date = today + timedelta(weeks=WEEKS_AHEAD)
     log.info(f"Processing date range: {today} to {end_date}")
 
-    # Find the correct sheet tab
-    tab_name = find_target_sheet(sheets_service)
+    # Find and load the tab holding the rota (validated, see load_rota_tab)
+    loaded = load_rota_tab(sheets_service, today, end_date)
+    if loaded is None:
+        log.error(
+            "No tab looks like the rota (needs Service/OnCall/CoMET headers and "
+            "dates in range). Calendar left untouched."
+        )
+        sys.exit(1)
+    tab_name, row_data, header_row_idx, columns = loaded
 
-    # Fetch full grid data (includes formatting)
-    resp = sheets_service.spreadsheets().get(
-        spreadsheetId=SPREADSHEET_ID,
-        ranges=[tab_name],
-        includeGridData=True,
-    ).execute()
-
-    sheet_data = resp["sheets"][0]["data"][0]
-    row_data = sheet_data.get("rowData", [])
-    if not row_data:
-        log.error("No row data found in sheet")
-        return
-
-    # Find the header row dynamically (scan for a row containing "Service")
-    header_row_idx = None
-    for scan_idx in range(min(50, len(row_data))):
-        scan_cells = row_data[scan_idx].get("values", [])
-        scan_texts = [get_cell_text(c).lower().strip() for c in scan_cells]
-        if "service" in scan_texts:
-            header_row_idx = scan_idx
-            break
-
-    if header_row_idx is None:
-        log.error("Could not find header row containing 'Service' in first 50 rows")
-        # Log first few rows for debugging
-        for dbg_idx in range(min(10, len(row_data))):
-            dbg_cells = row_data[dbg_idx].get("values", [])
-            dbg_texts = [get_cell_text(c) for c in dbg_cells]
-            log.info(f"  Row {dbg_idx}: {dbg_texts}")
-        return
-
-    header_cells = row_data[header_row_idx].get("values", [])
-    columns = identify_columns(header_cells)
-    header_texts = [get_cell_text(c) for c in header_cells]
+    header_texts = [get_cell_text(c) for c in row_data[header_row_idx].get("values", [])]
     log.info(f"Header row index: {header_row_idx}")
     log.info(f"Header row: {header_texts}")
-
-    if not columns:
-        log.error("Could not identify any relevant columns from header row")
-        return
 
     # Log first 5 data rows after header for debugging
     data_start = header_row_idx + 1
@@ -502,6 +521,18 @@ def main():
 
     # Fetch existing rota events from calendar
     existing = get_existing_rota_events(cal_service, today, end_date)
+
+    # Safety net: finding no shifts at all over the whole window while the
+    # calendar has rota events almost always means the sheet was misread
+    # (wrong tab, moved columns, renamed person), not that every shift was
+    # cancelled. Refuse to wipe the calendar in that case.
+    if not shifts and any(existing.values()):
+        log.error(
+            f"Found 0 shifts for '{MY_NAME}' but the calendar has existing rota "
+            "events. Refusing to delete them - check the tab, column headers and "
+            "MY_NAME. Calendar left untouched."
+        )
+        sys.exit(1)
 
     # Sync: iterate over each date in the window
     current = today
